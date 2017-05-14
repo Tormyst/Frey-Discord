@@ -1,0 +1,7 @@
+[package]
+name = "frey-discord"
+version = "0.1.0"
+authors = ["Tormyst <tormyst@github.com>"]
+
+[dependencies]
+discord = "0.8.0"
