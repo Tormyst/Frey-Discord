@@ -5,3 +5,4 @@ authors = ["Tormyst <tormyst@github.com>"]
 
 [dependencies]
 discord = "0.8.0"
+rand = "0.3"
