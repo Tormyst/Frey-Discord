@@ -2,10 +2,32 @@ extern crate discord;
 extern crate rand;
 
 use discord::{Discord, State};
-use discord::model::{Event, ChannelType, PossibleServer, Presence};
+use discord::model::{Event, ServerId, LiveServer, ChannelType, PossibleServer, Presence};
 use std::env;
+use std::thread;
+use std::collections::HashMap;
+use std::sync::mpsc;
 
 mod event_handler;
+
+struct Incoming {
+    servers: HashMap<ServerId, mpsc::Sender<Event>>,
+}
+
+impl Incoming {
+    pub fn new() -> Incoming {
+        Incoming { servers: HashMap::new() }
+    }
+
+    pub fn add_server(&mut self, ls: &LiveServer) {
+        let (sender, _): (mpsc::Sender<Event>, mpsc::Receiver<Event>) = mpsc::channel();
+        self.servers.insert(ls.id, sender);
+    }
+
+    pub fn remove_server(&mut self, id: ServerId) {
+        self.servers.remove(&id);
+    }
+}
 
 fn main() {
     // Log in to Discord using a bot token from the environment
@@ -32,7 +54,10 @@ fn main() {
              state.user().username,
              state.servers().len(),
              channel_count);
-
+    let mut incoming = Incoming::new();
+    for server in state.servers() {
+        incoming.add_server(server)
+    }
     loop {
         // Receive an event and update the state with it
         let event = match connection.recv_event() {
@@ -54,7 +79,11 @@ fn main() {
                 event_handler::handle_message_create(message, &state);
             }
             Event::ServerCreate(PossibleServer::Online(server)) => {
+                incoming.add_server(&server);
                 event_handler::handle_server_create_online(server)
+            }
+            Event::ServerDelete(server) => {
+                incoming.remove_server(server.id());
             }
             Event::PresenceUpdate {
                 presence: Presence {
