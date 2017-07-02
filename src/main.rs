@@ -8,6 +8,7 @@ use std::sync::Mutex;
 mod event_handler;
 mod incoming;
 mod server_handler;
+mod server_config {}
 
 pub struct Context {
     discord: Discord,

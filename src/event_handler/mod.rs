@@ -1,5 +1,8 @@
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use discord::{Discord, State, ChannelRef};
 use discord::model::{Message, LiveServer, Game, UserId, ServerId};
+use discord::model::permissions::Permissions;
 
 mod game_message;
 
@@ -58,10 +61,25 @@ pub fn handle_presence_update_start_game(discord: &Discord,
                                                               .get_member(server_id,
                                                                           user_id)
                                                               .expect("Failed get user"),
-                                                          game)
+                                                          &game)
                                   .as_str(),
                               "",
+
                               false);
+            let mut hasher = DefaultHasher::new();
+            game.name.hash(&mut hasher);
+            let hash = hasher.finish() % 2 ^ 24; // Maximum color value
+            println!("Game Hash: {:?}", hash);
+            let name = format!("__{}", game.name);
+            let role = discord.create_role(server_id,
+                                           Some(&name),
+                                           Some(Permissions::empty()),
+                                           Some(hash),
+                                           Some(false),
+                                           Some(false));
+
+            // discord.reorder_roles(server_id,
+            println!("{:?}", role);
         } else {
             println!("[PresenceUpdate] missing channel to send on")
         }

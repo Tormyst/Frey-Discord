@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use rand::Rng;
 use rand::thread_rng;
 
-pub fn get_start_game_message(member: Member, game: Game) -> String {
+pub fn get_start_game_message(member: Member, game: &Game) -> String {
     let mut map = HashMap::new();
     map.insert("TIS-100",
                ["$user is having a brain melting time playing $game",
