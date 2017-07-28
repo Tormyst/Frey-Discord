@@ -57,7 +57,23 @@ impl ServerHandler {
                     println!("[PresenceUpdate] matched game start.");
                     event_handler::handle_presence_update_start_game(game,
                                                                      user_id,
-                                                                     server_id, &self.context)
+                                                                     server_id,
+                                                                     &self.context)
+                }
+                Event::PresenceUpdate {
+                    presence: Presence {
+                        game: None,
+                        user_id,
+                        ..
+                    },
+                    server_id: Some(server_id),
+                    roles: Some(roles),
+                } => {
+                    println!("[PresenceUpdate] matched no game.");
+                    event_handler::handle_presence_update_end_game(user_id,
+                                                                   server_id,
+                                                                   &roles,
+                                                                   &self.context)
                 }
                 Event::Unknown(name, data) => {
                     // log unknown event types for later study

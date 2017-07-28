@@ -3,23 +3,26 @@ use std::hash::{Hash, Hasher};
 
 use Context;
 use discord::{State, ChannelRef};
-use discord::model::{Message, LiveServer, Game, UserId, ServerId};
+use discord::model::{Message, LiveServer, Game, UserId, ServerId, RoleId, Role};
 use discord::model::permissions::Permissions;
 
 static MAX_COLOR: u64 = 16777216; //2u64.pow(24)
+static IDENTIFY_ROLE: &'static str = "__";
 
 mod game_message;
+#[macro_use]
 mod helper {
     use Context;
     use discord::model::{ServerId, Role};
+    use super::IDENTIFY_ROLE;
 
     macro_rules! my_server {
-        ($self:expr, $state:expr) => ($state.find_server(*$self).unwrap())
+        ($self:expr, $state:expr) => ($state.find_server($self).unwrap())
     }
 
     pub fn reorder_game_ranks(server: &ServerId, context: &Context) {
         let state = &context.state.lock().unwrap();
-        let server = my_server!(server, state);
+        let server = my_server!(*server, state);
         // println!("Server state: {:?}", &server);
         let current_user_id = state.user().id;
         // println!("Current user ID: {:?}", current_user_id);
@@ -46,15 +49,18 @@ mod helper {
         println!("My_position: {:?}", my_position);
 
         let mut new_roles = Vec::new();
-        for Role { name, id, position , .. } in roles {
-            if position < my_position && name.starts_with("__") {
-                println!("Moving role {:?}",name);
+        for Role { name, id, position, .. } in roles {
+            if position < my_position && name.starts_with(IDENTIFY_ROLE) {
+                println!("Moving role {:?}", name);
                 new_roles.push((id, my_position as usize));
             }
         }
-        
+
         println!("{:?}",
-                    context.discord.reorder_roles(server.id, new_roles.as_slice()).unwrap());
+                 context
+                     .discord
+                     .reorder_roles(server.id, new_roles.as_slice())
+                     .unwrap());
     }
 }
 
@@ -107,31 +113,34 @@ pub fn handle_presence_update_start_game(game: Game,
     let discord = &context.discord;
     if let Ok(vec) = discord.get_server_channels(server_id) {
         if let Some(c) = vec.first() {
-            let member = discord.get_member(server_id, user_id).expect("Failed get user");
-            let _ = discord
-                .send_message(c.id,
-                              game_message
-                                  ::get_start_game_message(&member, &game)
-                                  .as_str(),
-                              "",
+            let member = discord
+                .get_member(server_id, user_id)
+                .expect("Failed get user");
+            let _ = discord.send_message(c.id,
+                                         game_message::get_start_game_message(&member, &game)
+                                             .as_str(),
+                                         "",
 
-                              false);
+                                         false);
             let mut hasher = DefaultHasher::new();
             game.name.hash(&mut hasher);
             let hash = hasher.finish() % MAX_COLOR; // Maximum color value
             println!("Game Hash: {:?}", hash);
-            let name = format!("__{}", game.name);
-            let role = discord.create_role(server_id,
-                                           Some(&name),
-                                           Some(Permissions::empty()),
-                                           Some(hash),
-                                           Some(false),
-                                           Some(false)).unwrap();
+            let name = format!("{}{}", IDENTIFY_ROLE, game.name);
+            let role = discord
+                .create_role(server_id,
+                             Some(&name),
+                             Some(Permissions::empty()),
+                             Some(hash),
+                             Some(false),
+                             Some(false))
+                .unwrap();
 
-            helper::reorder_game_ranks(&server_id, &context); 
+            helper::reorder_game_ranks(&server_id, &context);
             let mut member_roles = member.roles;
             member_roles.push(role.id);
-            println!("{:?}", discord.edit_member_roles(server_id, user_id, &member_roles));
+            println!("{:?}",
+                     discord.edit_member_roles(server_id, user_id, &member_roles));
             println!("{:?}", role);
         } else {
             println!("[PresenceUpdate] missing channel to send on")
@@ -139,4 +148,35 @@ pub fn handle_presence_update_start_game(game: Game,
     } else {
         println!("[PresenceUpdate] Did something")
     }
+}
+pub fn handle_presence_update_end_game(user_id: UserId,
+                                       server_id: ServerId,
+                                       roles: &[RoleId],
+                                       context: &Context) {
+
+    let game_roles: Vec<Role> = context
+        .discord
+        .get_roles(server_id)
+        .unwrap()
+        .into_iter()
+        .filter(|x| x.name.starts_with(IDENTIFY_ROLE) && roles.iter().any(|y| *y == x.id))
+        .collect();
+    let new_roles: Vec<RoleId> = roles
+        .iter()
+        .filter(|x| !game_roles.iter().all(|y| y.id != **x))
+        .map(|x| *x)
+        .collect();
+    println!("{:?}",
+             context
+                 .discord
+                 .edit_member_roles(server_id, user_id, &new_roles));
+    let state = &context.state.lock().unwrap();
+    let members = &my_server!(server_id, state).members;
+    for Role{id: gr, name, ..} in game_roles {
+        if !members.iter().any(|m| m.roles.iter().any(|r| gr == *r)) {
+            let _ = context.discord.delete_role(server_id, gr);
+            println!("Deleted Role {}", name);
+        }
+    }
+
 }
