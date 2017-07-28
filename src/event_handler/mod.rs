@@ -1,10 +1,62 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use discord::{Discord, State, ChannelRef};
+
+use Context;
+use discord::{State, ChannelRef};
 use discord::model::{Message, LiveServer, Game, UserId, ServerId};
 use discord::model::permissions::Permissions;
 
+static MAX_COLOR: u64 = 16777216; //2u64.pow(24)
+
 mod game_message;
+mod helper {
+    use Context;
+    use discord::model::{ServerId, Role};
+
+    macro_rules! my_server {
+        ($self:expr, $state:expr) => ($state.find_server(*$self).unwrap())
+    }
+
+    pub fn reorder_game_ranks(server: &ServerId, context: &Context) {
+        let state = &context.state.lock().unwrap();
+        let server = my_server!(server, state);
+        // println!("Server state: {:?}", &server);
+        let current_user_id = state.user().id;
+        // println!("Current user ID: {:?}", current_user_id);
+        let roles = server.roles.clone();
+
+
+        let my_member_role = server
+            .members
+            .iter()
+            .find(|&member| member.user.id == current_user_id)
+            .unwrap()
+            .roles
+            .get(0)
+            .unwrap();
+
+        //println!("My_member_role {}", my_member_role);
+
+        let my_position = roles
+            .iter()
+            .find(|&role| role.id == *my_member_role)
+            .unwrap()
+            .position;
+
+        println!("My_position: {:?}", my_position);
+
+        let mut new_roles = Vec::new();
+        for Role { name, id, position , .. } in roles {
+            if position < my_position && name.starts_with("__") {
+                println!("Moving role {:?}",name);
+                new_roles.push((id, my_position as usize));
+            }
+        }
+        
+        println!("{:?}",
+                    context.discord.reorder_roles(server.id, new_roles.as_slice()).unwrap());
+    }
+}
 
 pub fn handle_message_create(message: Message, state: &State) {
     match state.find_channel(message.channel_id) {
@@ -43,32 +95,30 @@ pub fn handle_server_create_online(server: LiveServer) {
     println!("[ServerCreate] found online server: {}", server.name)
 }
 
-pub fn handle_presence_update_start_game(discord: &Discord,
-                                         game: Game,
+pub fn handle_presence_update_start_game(game: Game,
                                          user_id: UserId,
-                                         server_id: ServerId) {
+                                         server_id: ServerId,
+                                         context: &Context) {
     // let username = match presence.nick {
     //     Some(u) => u,
     //     None => match presence.user {
     //         Some(u) =>
     // }
+    let discord = &context.discord;
     if let Ok(vec) = discord.get_server_channels(server_id) {
         if let Some(c) = vec.first() {
+            let member = discord.get_member(server_id, user_id).expect("Failed get user");
             let _ = discord
                 .send_message(c.id,
                               game_message
-                                  ::get_start_game_message(discord
-                                                              .get_member(server_id,
-                                                                          user_id)
-                                                              .expect("Failed get user"),
-                                                          &game)
+                                  ::get_start_game_message(&member, &game)
                                   .as_str(),
                               "",
 
                               false);
             let mut hasher = DefaultHasher::new();
             game.name.hash(&mut hasher);
-            let hash = hasher.finish() % 2 ^ 24; // Maximum color value
+            let hash = hasher.finish() % MAX_COLOR; // Maximum color value
             println!("Game Hash: {:?}", hash);
             let name = format!("__{}", game.name);
             let role = discord.create_role(server_id,
@@ -76,9 +126,12 @@ pub fn handle_presence_update_start_game(discord: &Discord,
                                            Some(Permissions::empty()),
                                            Some(hash),
                                            Some(false),
-                                           Some(false));
+                                           Some(false)).unwrap();
 
-            // discord.reorder_roles(server_id,
+            helper::reorder_game_ranks(&server_id, &context); 
+            let mut member_roles = member.roles;
+            member_roles.push(role.id);
+            println!("{:?}", discord.edit_member_roles(server_id, user_id, &member_roles));
             println!("{:?}", role);
         } else {
             println!("[PresenceUpdate] missing channel to send on")

@@ -5,7 +5,7 @@ authors = ["Tormyst <tormyst@github.com>"]
 
 [dependencies]
 # discord = "0.8.0"
-discord = { git = "https://github.com/Tormyst/discord-rs", branch = "pr/100" }
+discord = { git = "https://github.com/Tormyst/discord-rs", branch = "p100" }
 rand = "0.3"
 
 # Serialize

@@ -6,10 +6,6 @@ use std::thread;
 use std::sync::{mpsc, Arc};
 use {Context, event_handler};
 
-macro_rules! my_server {
-    ($self:expr, $state:expr) => ($state.find_server($self.id).unwrap())
-}
-
 pub struct ServerHandler {
     id: ServerId,
     recever: mpsc::Receiver<Event>,
@@ -27,44 +23,9 @@ impl ServerHandler {
         thread::spawn(move || t.main());
     }
 
-    fn reorder_game_ranks(&self, context: &Context) {
-        let state = &context.state.lock().unwrap();
-        let server = my_server!(self, state);
-        println!("Server state: {:?}", &server);
-        let current_user_id = state.user().id;
-        println!("Current user ID: {:?}", current_user_id);
-        let roles = server.roles.clone();
-
-        let my_member_role = server
-            .members
-            .iter()
-            .find(|&member| member.user.id == current_user_id)
-            .unwrap()
-            .roles
-            .get(0)
-            .unwrap();
-
-        println!("My_member_role {}", my_member_role);
-
-        let my_position = roles
-            .iter()
-            .find(|&role| role.id == *my_member_role)
-            .unwrap()
-            .position as usize;
-        let mut new_roles = Vec::new();
-        for discord::model::Role { name, id, position, .. } in roles {
-            if name.chars().nth(0).unwrap() == '_' {
-                println!("Role {}: {} : {}", position, name, id);
-                new_roles.push((id, my_position));
-            }
-        }
-        println!("{:?}",
-                 context.discord.reorder_roles(self.id, new_roles.as_slice()));
-    }
-
     fn main(&mut self) {
         {
-            self.reorder_game_ranks(&self.context)
+            // helper.reorder_game_ranks(&self.context)
         }
         loop {
             let event = match self.recever.recv() {
@@ -94,10 +55,9 @@ impl ServerHandler {
                     roles: _,
                 } => {
                     println!("[PresenceUpdate] matched game start.");
-                    event_handler::handle_presence_update_start_game(&self.context.discord,
-                                                                     game,
+                    event_handler::handle_presence_update_start_game(game,
                                                                      user_id,
-                                                                     server_id)
+                                                                     server_id, &self.context)
                 }
                 Event::Unknown(name, data) => {
                     // log unknown event types for later study
