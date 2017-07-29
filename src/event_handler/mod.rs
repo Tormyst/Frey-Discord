@@ -154,28 +154,19 @@ pub fn handle_presence_update_end_game(user_id: UserId,
                                        roles: &[RoleId],
                                        context: &Context) {
 
-    let game_roles: Vec<Role> = context
+    let game_roles: Vec<RoleId> = context
         .discord
         .get_roles(server_id)
         .unwrap()
         .into_iter()
         .filter(|x| x.name.starts_with(IDENTIFY_ROLE) && roles.iter().any(|y| *y == x.id))
+        .map(|x| {context.discord.remove_member_role(server_id, user_id, x.id).unwrap(); x.id})
         .collect();
-    let new_roles: Vec<RoleId> = roles
-        .iter()
-        .filter(|x| !game_roles.iter().all(|y| y.id != **x))
-        .map(|x| *x)
-        .collect();
-    println!("{:?}",
-             context
-                 .discord
-                 .edit_member_roles(server_id, user_id, &new_roles));
     let state = &context.state.lock().unwrap();
     let members = &my_server!(server_id, state).members;
-    for Role{id: gr, name, ..} in game_roles {
-        if !members.iter().any(|m| m.roles.iter().any(|r| gr == *r)) {
-            let _ = context.discord.delete_role(server_id, gr);
-            println!("Deleted Role {}", name);
+    for id in game_roles {
+        if !members.iter().any(|m| m.roles.iter().any(|r| id == *r)) {
+            let _ = context.discord.delete_role(server_id, id);
         }
     }
 
