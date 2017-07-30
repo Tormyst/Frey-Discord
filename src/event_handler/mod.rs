@@ -13,13 +13,51 @@ mod game_message;
 #[macro_use]
 mod helper {
     use Context;
-    use discord::model::{ServerId, Role};
-    use super::IDENTIFY_ROLE;
+    use discord::model::{ServerId, RoleId};
+    // use discord::model::Role
+    // use super::IDENTIFY_ROLE;
 
     macro_rules! my_server {
         ($self:expr, $state:expr) => ($state.find_server($self).unwrap())
     }
 
+    pub fn reorder_single_rank(server: &ServerId, rank: RoleId, context: &Context) {
+        let state = &context.state.lock().unwrap();
+        let server = my_server!(*server, state);
+        // println!("Server state: {:?}", &server);
+        let current_user_id = state.user().id;
+        // println!("Current user ID: {:?}", current_user_id);
+        let roles = server.roles.clone();
+
+        let my_member_role = server
+            .members
+            .iter()
+            .find(|&member| member.user.id == current_user_id)
+            .unwrap()
+            .roles
+            .get(0)
+            .unwrap();
+
+        println!("My_member_role {}", my_member_role);
+
+        let my_position = roles
+            .iter()
+            .find(|&role| role.id == *my_member_role)
+            .unwrap()
+            .position;
+
+        println!("My_position: {:?}", my_position);
+
+        let new_role = vec![(rank, my_position as usize)];
+
+        println!("{:?}",
+                 context
+                     .discord
+                     .reorder_roles(server.id, new_role.as_slice())
+                     .unwrap());
+    }
+
+/*
     pub fn reorder_game_ranks(server: &ServerId, context: &Context) {
         let state = &context.state.lock().unwrap();
         let server = my_server!(*server, state);
@@ -62,6 +100,7 @@ mod helper {
                      .reorder_roles(server.id, new_roles.as_slice())
                      .unwrap());
     }
+    */
 }
 
 pub fn handle_message_create(message: Message, state: &State) {
@@ -135,8 +174,8 @@ pub fn handle_presence_update_start_game(game: Game,
                              Some(false),
                              Some(false))
                 .unwrap();
-
-            helper::reorder_game_ranks(&server_id, &context);
+            helper::reorder_single_rank(&server_id, role.id, &context);
+            // helper::reorder_game_ranks(&server_id, &context);
             println!("{:?}", discord.add_member_role(server_id, user_id, role.id));
         } else {
             println!("[PresenceUpdate] missing channel to send on")
