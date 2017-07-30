@@ -3,7 +3,7 @@ use std::hash::{Hash, Hasher};
 
 use Context;
 use discord::{State, ChannelRef};
-use discord::model::{Message, LiveServer, Game, UserId, ServerId, RoleId, Role};
+use discord::model::{Message, LiveServer, Game, UserId, ServerId, RoleId};
 use discord::model::permissions::Permissions;
 
 static MAX_COLOR: u64 = 16777216; //2u64.pow(24)
@@ -38,7 +38,7 @@ mod helper {
             .get(0)
             .unwrap();
 
-        //println!("My_member_role {}", my_member_role);
+        println!("My_member_role {}", my_member_role);
 
         let my_position = roles
             .iter()
@@ -49,8 +49,8 @@ mod helper {
         println!("My_position: {:?}", my_position);
 
         let mut new_roles = Vec::new();
-        for Role { name, id, position, .. } in roles {
-            if position < my_position && name.starts_with(IDENTIFY_ROLE) {
+        for Role { name, id, .. } in roles {
+            if name.starts_with(IDENTIFY_ROLE) {
                 println!("Moving role {:?}", name);
                 new_roles.push((id, my_position as usize));
             }
@@ -137,11 +137,7 @@ pub fn handle_presence_update_start_game(game: Game,
                 .unwrap();
 
             helper::reorder_game_ranks(&server_id, &context);
-            let mut member_roles = member.roles;
-            member_roles.push(role.id);
-            println!("{:?}",
-                     discord.edit_member_roles(server_id, user_id, &member_roles));
-            println!("{:?}", role);
+            println!("{:?}", discord.add_member_role(server_id, user_id, role.id));
         } else {
             println!("[PresenceUpdate] missing channel to send on")
         }
@@ -160,7 +156,13 @@ pub fn handle_presence_update_end_game(user_id: UserId,
         .unwrap()
         .into_iter()
         .filter(|x| x.name.starts_with(IDENTIFY_ROLE) && roles.iter().any(|y| *y == x.id))
-        .map(|x| {context.discord.remove_member_role(server_id, user_id, x.id).unwrap(); x.id})
+        .map(|x| {
+                 context
+                     .discord
+                     .remove_member_role(server_id, user_id, x.id)
+                     .unwrap();
+                 x.id
+             })
         .collect();
     let state = &context.state.lock().unwrap();
     let members = &my_server!(server_id, state).members;
@@ -169,5 +171,4 @@ pub fn handle_presence_update_end_game(user_id: UserId,
             let _ = context.discord.delete_role(server_id, id);
         }
     }
-
 }
