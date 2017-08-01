@@ -5,11 +5,13 @@ use discord::model::{Event, ServerId, Presence};
 use std::thread;
 use std::sync::{mpsc, Arc};
 use {Context, event_handler};
+use server_config;
 
 pub struct ServerHandler {
     id: ServerId,
     recever: mpsc::Receiver<Event>,
     context: Arc<Context>,
+    settings: server_config::ServerSettings,
 }
 
 impl ServerHandler {
@@ -18,6 +20,7 @@ impl ServerHandler {
             id,
             recever,
             context,
+            settings: server_config::get(id),
         };
         let _ = t.load_config();
         thread::spawn(move || t.main());
@@ -58,7 +61,8 @@ impl ServerHandler {
                     event_handler::handle_presence_update_start_game(game,
                                                                      user_id,
                                                                      server_id,
-                                                                     &self.context)
+                                                                     &self.context,
+                                                                     &self.settings,)
                 }
                 Event::PresenceUpdate {
                     presence: Presence {

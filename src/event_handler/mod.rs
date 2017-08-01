@@ -2,6 +2,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use Context;
+use server_config::ServerSettings;
 use discord::{State, ChannelRef};
 use discord::model::{Message, LiveServer, Game, UserId, ServerId, RoleId};
 use discord::model::permissions::Permissions;
@@ -57,7 +58,7 @@ mod helper {
                      .unwrap());
     }
 
-/*
+    /*
     pub fn reorder_game_ranks(server: &ServerId, context: &Context) {
         let state = &context.state.lock().unwrap();
         let server = my_server!(*server, state);
@@ -143,7 +144,8 @@ pub fn handle_server_create_online(server: LiveServer) {
 pub fn handle_presence_update_start_game(game: Game,
                                          user_id: UserId,
                                          server_id: ServerId,
-                                         context: &Context) {
+                                         context: &Context,
+                                         settings: &ServerSettings) {
     // let username = match presence.nick {
     //     Some(u) => u,
     //     None => match presence.user {
@@ -155,12 +157,15 @@ pub fn handle_presence_update_start_game(game: Game,
             let member = discord
                 .get_member(server_id, user_id)
                 .expect("Failed get user");
-            let _ = discord.send_message(c.id,
-                                         game_message::get_start_game_message(&member, &game)
-                                             .as_str(),
-                                         "",
+            let _ = discord
+                .send_message(c.id,
+                              game_message::get_start_game_message(&member,
+                                                                   &game,
+                                                                   &settings.game_messages)
+                                      .as_str(),
+                              "",
 
-                                         false);
+                              false);
             let mut hasher = DefaultHasher::new();
             game.name.hash(&mut hasher);
             let hash = hasher.finish() % MAX_COLOR; // Maximum color value

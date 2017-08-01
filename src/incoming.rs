@@ -19,6 +19,10 @@ impl Incoming {
     pub fn new(discord: Discord) -> Incoming {
         let (connection, ready) = discord.connect().expect("connect failed");
         let state = State::new(ready);
+        let mut map = HashMap::new();
+        map.insert(String::from("TIS-100"),
+                   vec![String::from("$user is having a brain melting time playing $game"),
+                        String::from("mov $user, TIS-100")]);
         Incoming {
             servers: HashMap::new(),
             context: Arc::new(Context {
